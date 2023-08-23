@@ -1,6 +1,12 @@
+import warnings
+
 import numpy as np
+
 import astropy.units as u
 from astropy.wcs import WCS
+from astropy.nddata.utils import Cutout2D
+from astropy.utils.exceptions import AstropyWarning
+from astropy.visualization import simple_norm, ZScaleInterval, AsinhStretch, ImageNormalize
 
 import matplotlib.pyplot as plt
 
@@ -58,7 +64,7 @@ def transform_rect(points):
     
     angle = calc_angle(points[-1], points[0])
     
-    return xy, width, height, angle
+    return xy, width, -height, angle
         
     
 def plot_field(ax, center, radius, figure=None):
@@ -118,20 +124,113 @@ def plot_all_objs(ax, objects, center, count=0, show_field=False,
     return ax
 
 
-def plot_focal_plane(ax, hdulist, showExtName=True, txtOffset=30*u.arcsec, figure=None):
+def plot_focal_plane(ax, hdulist, showExtName=True, txt_x_offset=20*u.arcsec, txt_y_offset=-120*u.arcsec, figure=None):
     """Plots the footprint of given HDUList on the axis."""
-    wcss = [WCS(hdu.header) for hdu in hdulist]
+    with warnings.catch_warnings():
+            warnings.simplefilter('ignore', AstropyWarning)
+            wcss = [WCS(hdu.header) for hdu in hdulist]
     # I really wish that WCS would pop an error when unable to 
     # init from a header instead of defaulting, oh, and __eq__ 
     # doesn't compare naturally
     default_wcs = WCS().to_header_string()
     for hdu in hdulist:
-        wcs = WCS(hdu.header)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', AstropyWarning)
+            wcs = WCS(hdu.header)
+            
         if default_wcs != wcs.to_header_string():
             ax = plot_footprint(ax, wcs)
             pt = wcs.pixel_to_world(0, 0)
-            x, y = pt.ra.deg+0.01, pt.dec.deg+0.01
-            ax.text(x, y, hdu.header.get("EXTNAME", None))
+            # I swear to got god damn units vs quantities
+            xoffset = txt_x_offset.to(u.deg).value
+            yoffset = txt_y_offset.to(u.deg).value
+            # we need to move diagonally to the right and down to center the text
+            x, y = pt.ra.deg+xoffset , pt.dec.deg+yoffset
+            ax.text(x, y, hdu.header.get("EXTNAME", None), clip_on=True)
         
     #ax = plot_footprints(ax, wcss)
     return ax
+
+
+def plot_cutouts(axes, cutouts, remove_extra_axes=True):
+    """Plots cutouts (images) onto given axes. 
+    
+    The number of axes must be equal to or greater
+    than the number of cutouts.
+    
+    Parameters
+    ----------
+    ax : `list[matplotlib.pyplot.Axes]`
+        Axes.
+    cutouts : `list`, `np.array` or `astropy.ndutils.Cutout2D`
+        Collection of numpy arrays or ``Cutout2D`` objects 
+        to plot.
+    remove_extra_axes : `bool`, optional
+         When `True` (default), the axes that would be 
+         left empty are removed from the plot. 
+         
+    Raises
+    -------
+    ValueError - When number of given axes is less than
+    the number of given cutouts.
+    """ 
+    nplots = len(cutouts)
+    
+    axs = axes.ravel()
+    naxes = len(axs)
+    
+    if naxes < nplots:
+        raise ValueError(f"N axes ({len(axes)}) doesn't match N plots ({nplots}).")
+
+    for ax, cutout in zip(axs, cutouts):
+        if isinstance(cutout, Cutout2D):
+            norm = ImageNormalize(cutout.data, interval=ZScaleInterval(), stretch=AsinhStretch())
+            im = ax.imshow(cutout.data, norm=norm)
+        else:
+            norm = ImageNormalize(cutout, interval=ZScaleInterval(), stretch=AsinhStretch())
+            im = ax.imshow(cutout, norm=norm)
+        ax.set_aspect("equal")
+        ax.axvline(cutout.shape[0]/2, c="red", lw=0.25)
+        ax.axhline(cutout.shape[1]/2, c="red", lw=0.25)
+        
+    
+    if remove_extra_axes and naxes > nplots:
+        for ax in axs[nplots-naxes:]:
+            ax.remove()        
+
+    return axes
+
+
+def plot_img(img, ax=None, norm=True, title=None):
+    """Plots an image on an axis, if no axis is given
+    creates a new figure. Draws a crosshair at the 
+    center of the image.
+    
+    Parameters
+    ----------
+    img : `np.array`
+        Image array
+    ax : `matplotlib.pyplot.Axes` or `None`
+        Axes, `None` by default.
+    norm: `bool`, optional
+        Normalize the image using Astropy's `ImageNormalize`
+        using `ZScaleInterval` and `AsinhStretch`. `True` by
+        default.
+    title : `str` or None, optional
+        Title of the plot.     
+    """
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(15, 10))
+     
+    if norm:
+        norm = ImageNormalize(img, interval=ZScaleInterval(), stretch=AsinhStretch())
+        im = ax.imshow(img, norm=norm)
+    else:
+        im = ax.imshow(img)
+        
+    ax.axvline(img.shape[0]/2, c="red", lw=0.5)
+    ax.axhline(img.shape[1]/2, c="red", lw=0.5)
+    ax.set_title(title)
+    fig.colorbar(im, label="Counts")
+    
+    return fig, ax

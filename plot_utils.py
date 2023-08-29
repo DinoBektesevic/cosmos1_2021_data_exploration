@@ -183,12 +183,9 @@ def plot_cutouts(axes, cutouts, remove_extra_axes=True):
         raise ValueError(f"N axes ({len(axes)}) doesn't match N plots ({nplots}).")
 
     for ax, cutout in zip(axs, cutouts):
-        if isinstance(cutout, Cutout2D):
-            norm = ImageNormalize(cutout.data, interval=ZScaleInterval(), stretch=AsinhStretch())
-            im = ax.imshow(cutout.data, norm=norm)
-        else:
-            norm = ImageNormalize(cutout, interval=ZScaleInterval(), stretch=AsinhStretch())
-            im = ax.imshow(cutout, norm=norm)
+        img = cutout.data if isinstance(cutout, Cutout2D) else cutout
+        norm = ImageNormalize(img, interval=ZScaleInterval(), stretch=AsinhStretch())
+        im = ax.imshow(cutout.data, norm=norm)
         ax.set_aspect("equal")
         ax.axvline(cutout.shape[0]/2, c="red", lw=0.25)
         ax.axhline(cutout.shape[1]/2, c="red", lw=0.25)

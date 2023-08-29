@@ -192,7 +192,7 @@ def plot_cutouts(axes, cutouts, remove_extra_axes=True):
     naxes = len(axs)
     
     if naxes < nplots:
-        raise ValueError(f"N axes ({len(axes)}) doesn't match N plots ({nplots}).")
+        raise ValueError(f"N axes ({len(axs)}) doesn't match N plots ({nplots}).")
 
     for ax, cutout in zip(axs, cutouts):
         img = cutout.data if isinstance(cutout, Cutout2D) else cutout

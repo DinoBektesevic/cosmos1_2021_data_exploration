@@ -74,8 +74,20 @@ def plot_field(ax, center, radius, figure=None):
     circ = plt.Circle(center, radius, fill=False, color="black")
     ax.add_artist(circ)
     return ax
-    
-    
+
+def plot_bbox(ax, bbox, figure=None):
+    """Adds the footprint defined by the given BBOX to the axis."""
+    xy, width, height, angle = transform_rect(bbox)
+    rect = plt.Rectangle(xy, width, height, angle=angle, fill=None, color="black")
+    ax.add_artist(rect)
+    return ax
+
+def plot_bboxes(ax, bboxes, figure=None):
+    """Adds the footprints defined by each given BBOX to the axis."""
+    for bbox in bboxes:
+        ax = plot_bbox(ax, bbox, figure)
+    return ax
+
 def plot_footprint(ax, wcs, figure=None):
     """Adds the footprint defined by the given WCS to the axis."""
     xy, width, height, angle = transform_rect(wcs.calc_footprint())
